@@ -14,7 +14,7 @@ When using any of this project's source code, please cite:
 ```bibtex
 @misc{karatzas2023omninav,
       title={OmniNav: Rainbow - DQN Algorithm Applications Towards Self-Driving Cars},
-      author={Andreas Karatzas, Leili Hadian Dahaj, and Melody Famil Rasoulian},
+      author={Andreas Karatzas},
       year={2023},
       publisher = {GitHub},
       journal = {GitHub repository},
@@ -33,3 +33,10 @@ If you either added or removed packages, then you can save a checkpoint of the `
 ```bash
 conda env export --no-builds > environment.yml
 ```
+
+### Usage
+
+
+### Results
+
+
