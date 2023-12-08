@@ -10,9 +10,7 @@ from rich.progress import Progress
 from src.agent import Agent
 from src.metrics import MetricLogger
 from src.utils import (
-    stats_printer,
     test_stats,
-    save_3d_array_to_xlsx
 )
 
 
@@ -26,26 +24,22 @@ class Engine:
         en_eval: bool = False,
         en_visual: bool = False,
         episodes: int = 1000,
-        test_cases: int = 10,
         verbosity: int = 10,
-        workload: list = None
     ):
         self.env = env
         self.visual = en_visual
         self.agent = agent
         self.logger = logger
         self.episodes = episodes
-        self.test_cases = test_cases
         self.verbosity = verbosity
         self.en_train = en_train
         self.en_eval = en_eval
 
         self.last_ep = 0
 
-        if self.en_train:
+        if en_train:
             self.train()
-
-        if self.en_eval:
+        if en_eval:
             self.eval()
 
     def train(self):
@@ -115,14 +109,8 @@ class Engine:
         positive_reward = []
         mission_status = []
 
-        # Check demo value in config
-        if self.env.demo == 0:
-            print(
-                "Demo value in config is not set to True. Please set it to True to run evaluation.")
-            return
-
         # Agent evaluation loop
-        for test_case in range(self.test_cases):
+        for e in range(self.episodes):
 
             state, info = self.env.reset()
 
@@ -134,8 +122,7 @@ class Engine:
             while not terminated and not truncated:
 
                 # 0. Show environment (the visual) [WIP]
-                if self.visual:
-                    self.env.render()
+                self.env.render()
 
                 # 1. Run agent on the state
                 action = self.agent.act(state)
@@ -161,7 +148,7 @@ class Engine:
                     mission_status.append(True if score > 100 else False)
 
             end = time.time()
-            print(f"Test case {test_case} took {end - start} seconds")
+            print(f"Test case {e} took {end - start} seconds")
 
         self.env.close()
         self.logger.close()

@@ -67,6 +67,8 @@ class Agent:
         If `True`, prints some more information.
     demo : bool
         If `True`, runs the agent in test mode.
+    en_cnn : bool
+        If `True`, runs the agent in CNN env.
     learning_starts : int
         Number of steps before starting to train the agent.
     num_hiddens : int
@@ -109,11 +111,10 @@ class Agent:
         topk: int = 5,
         verbose: bool = False,
         demo: bool = False,
+        en_cnn: bool = False,
         learning_starts: int = int(1e3),
         num_hiddens: int = 128,
         device: str = 'cpu',
-        activation: str = 'relu',
-        enable_base_model: bool = False,
     ):
         self.batch_size = batch_size
         self.target_update = target_sync
@@ -133,6 +134,7 @@ class Agent:
             os.makedirs(self.bak_dir)
 
         # Agent checkpoint helper variables
+        self.act_space = env.action_space.n
         self.counter = 0
         self.curr_step = 0
         self.curr_episode = 0
@@ -142,7 +144,7 @@ class Agent:
         self.curr_best_mean_reward = -np.inf
         self.ep_rewards = np.zeros(
             (self.model_interval, 1),
-            dtype=np.float)
+            dtype=np.float64)
 
         # Device: cpu / gpu
         self.device = self.get_device(device=device)
@@ -175,11 +177,13 @@ class Agent:
 
         # Networks: online, target
         self.online = RainbowDQN(in_dim=env.observation_space.shape, out_dim=env.action_space.n, 
-                                 atom_size=self.atoms, support=self.support, activation=activation, 
-                                 num_hiddens=num_hiddens, enable_base_model=enable_base_model, verbose=verbose).to(self.device)
+                                 atom_size=self.atoms, support=self.support, 
+                                 num_hiddens=num_hiddens, verbose=verbose,
+                                 en_cnn=en_cnn).to(self.device)
         self.target = RainbowDQN(in_dim=env.observation_space.shape, out_dim=env.action_space.n, 
-                                 atom_size=self.atoms, support=self.support, activation=activation, 
-                                 num_hiddens=num_hiddens, enable_base_model=enable_base_model, verbose=verbose).to(self.device)
+                                 atom_size=self.atoms, support=self.support, 
+                                 num_hiddens=num_hiddens, verbose=verbose,
+                                 en_cnn=en_cnn).to(self.device)
         self.target.load_state_dict(self.online.state_dict())
         self.online.train()
         self.target.eval()
@@ -254,7 +258,7 @@ class Agent:
         action_idx = torch.argmax(action_values, axis=1).item()
 
         if self.learning_starts > self.curr_step and not self.demo:
-            action_idx = np.random.randint(0, self.env.action_space.n)
+            action_idx = np.random.randint(0, self.act_space)
 
         # Increment step
         self.curr_step += 1
@@ -470,7 +474,7 @@ class Agent:
         # If learning has started
         if self.learning_starts < self.curr_step:
             # If number of steps since last update is more than the interval
-            if self.last_model_chkpt > self.model_interval:
+            if self.last_model_chkpt % self.model_interval == self.model_interval - 1:
                 # If current model is better than last checkpoint
                 if np.mean(self.ep_rewards) > self.curr_best_mean_reward:
                     # Update best mean reward metric
@@ -485,6 +489,8 @@ class Agent:
                         self.save(recent=True)
                         # Update current episode
                         self.curr_episode = episode
+                        # Reset checkpoint counter
+                        self.last_model_chkpt = 0
             else:
                 # Update checkpoint counter
                 self.last_model_chkpt += 1

@@ -8,7 +8,12 @@ from C to Python with ctypes, so it can run without compiling anything.
 
 import ctypes
 
-from common.terminal import colorstr
+from rich.console import Console
+
+
+def colorstr(color, text):
+    """Apply color and style to the given text."""
+    return f"[{color}]{text}[/{color}]"
 
 
 CUDA_SUCCESS = 0
@@ -85,7 +90,6 @@ def ConvertSMVer2Arch(major, minor):
 
 
 def cuda_check(verbose: bool = False):
-
     libnames = ('libcuda.so', 'libcuda.dylib', 'nvcuda.dll')
     for libname in libnames:
         try:
@@ -113,7 +117,8 @@ def cuda_check(verbose: bool = False):
     context = ctypes.c_void_p()
     error_str = ctypes.c_char_p()
 
-    msg = f""
+    console = Console()
+    msg = ""
 
     tab_char = "\t"
     new_line_char = "\n"
@@ -121,74 +126,56 @@ def cuda_check(verbose: bool = False):
     result = cuda.cuInit(0)
     if result != CUDA_SUCCESS:
         cuda.cuGetErrorString(result, ctypes.byref(error_str))
-        print("cuInit failed with error code %d: %s" %
-              (result, error_str.value.decode()))
+        console.print(f"cuInit failed with error code {result}: {error_str.value.decode()}")
         return 1
     result = cuda.cuDeviceGetCount(ctypes.byref(nGpus))
     if result != CUDA_SUCCESS:
         cuda.cuGetErrorString(result, ctypes.byref(error_str))
-        print("cuDeviceGetCount failed with error code %d: %s" %
-              (result, error_str.value.decode()))
+        console.print(f"cuDeviceGetCount failed with error code {result}: {error_str.value.decode()}")
         return 1
-    msg = msg + \
-        f"Found {colorstr(options=['cyan'], string_args=list([nGpus.value]))} device(s).{new_line_char}"
+    msg += f"Found {colorstr('cyan', str(nGpus.value))} device(s).{new_line_char}"
     for i in range(nGpus.value):
         result = cuda.cuDeviceGet(ctypes.byref(device), i)
         if result != CUDA_SUCCESS:
             cuda.cuGetErrorString(result, ctypes.byref(error_str))
-            print("cuDeviceGet failed with error code %d: %s" %
-                  (result, error_str.value.decode()))
+            console.print(f"cuDeviceGet failed with error code {result}: {error_str.value.decode()}")
             return 1
-        msg = msg + \
-            f"{colorstr(options=['red', 'underline'], string_args=list(['Device']))}: {i}{new_line_char}"
+        msg += f"{colorstr('red underline', 'Device')}: {i}{new_line_char}"
         if cuda.cuDeviceGetName(ctypes.c_char_p(name), len(name), device) == CUDA_SUCCESS:
             tmp_name = name.split(b'\0', 1)[0].decode()
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Name']))}: {tmp_name}{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'Name')}: {tmp_name}{new_line_char}"
         if cuda.cuDeviceComputeCapability(ctypes.byref(cc_major), ctypes.byref(cc_minor), device) == CUDA_SUCCESS:
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Compute Capability']))}: {cc_major.value}.{cc_minor.value}{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'Compute Capability')}: {cc_major.value}.{cc_minor.value}{new_line_char}"
         if cuda.cuDeviceGetAttribute(ctypes.byref(cores), CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device) == CUDA_SUCCESS:
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Multiprocessors']))}: {cores.value}{new_line_char}"
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['CUDA Cores']))}: {(cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value) or 'unknown')}{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'Multiprocessors')}: {cores.value}{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'CUDA Cores')}: {(cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value) or 'unknown')}{new_line_char}"
             if cuda.cuDeviceGetAttribute(ctypes.byref(threads_per_core), CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, device) == CUDA_SUCCESS:
-                msg = msg + \
-                    f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Concurrent threads']))}: {(cores.value * threads_per_core.value)}{new_line_char}"
+                msg += f"{tab_char}{colorstr('red underline', 'Concurrent threads')}: {(cores.value * threads_per_core.value)}{new_line_char}"
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device) == CUDA_SUCCESS:
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['GPU clock']))}: {(clockrate.value / 1000.)} MHz{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'GPU clock')}: {(clockrate.value / 1000.)} MHz{new_line_char}"
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, device) == CUDA_SUCCESS:
-            msg = msg + \
-                f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Memory clock']))}: {(clockrate.value / 1000.)} MHz{new_line_char}"
+            msg += f"{tab_char}{colorstr('red underline', 'Memory clock')}: {(clockrate.value / 1000.)} MHz{new_line_char}"
         try:
             result = cuda.cuCtxCreate_v2(ctypes.byref(context), 0, device)
         except AttributeError:
             result = cuda.cuCtxCreate(ctypes.byref(context), 0, device)
         if result != CUDA_SUCCESS:
             cuda.cuGetErrorString(result, ctypes.byref(error_str))
-            print("cuCtxCreate failed with error code %d: %s" %
-                  (result, error_str.value.decode()))
+            console.print(f"cuCtxCreate failed with error code {result}: {error_str.value.decode()}")
         else:
             try:
-                result = cuda.cuMemGetInfo_v2(
-                    ctypes.byref(freeMem), ctypes.byref(totalMem))
+                result = cuda.cuMemGetInfo_v2(ctypes.byref(freeMem), ctypes.byref(totalMem))
             except AttributeError:
-                result = cuda.cuMemGetInfo(
-                    ctypes.byref(freeMem), ctypes.byref(totalMem))
+                result = cuda.cuMemGetInfo(ctypes.byref(freeMem), ctypes.byref(totalMem))
             if result == CUDA_SUCCESS:
-                msg = msg + \
-                    f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Total Memory']))}: {(totalMem.value / 1024**2)} MiB{new_line_char}"
-                msg = msg + \
-                    f"{tab_char}{colorstr(options=['red', 'underline'], string_args=list(['Free Memory']))}: {(freeMem.value / 1024**2)} MiB{new_line_char}"
+                msg += f"{tab_char}{colorstr('red underline', 'Total Memory')}: {(totalMem.value / 1024**2)} MiB{new_line_char}"
+                msg += f"{tab_char}{colorstr('red underline', 'Free Memory')}: {(freeMem.value / 1024**2)} MiB{new_line_char}"
             else:
                 cuda.cuGetErrorString(result, ctypes.byref(error_str))
-                print("cuMemGetInfo failed with error code %d: %s" %
-                      (result, error_str.value.decode()))
+                console.print(f"cuMemGetInfo failed with error code {result}: {error_str.value.decode()}")
             cuda.cuCtxDetach(context)
 
     if verbose:
-        print(msg)
+        console.print(msg)
 
     return nGpus.value, ConvertSMVer2Arch(cc_major.value, cc_minor.value), msg

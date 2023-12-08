@@ -39,4 +39,11 @@ conda env export --no-builds > environment.yml
 
 ### Results
 
+To monitor with TensorBoard, use:
+
+```bash
+tensorboard --logdir=./data/datetime/ --host localhost --port 8888
+```
+
+
 

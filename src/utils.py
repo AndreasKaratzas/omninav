@@ -133,7 +133,7 @@ def save_3d_array_to_xlsx(arr, filename):
 def experiment_data_plots(export_data_dir, datetime_tag):
     """Plots training loss progress and mean accumulated episode reward.
     """
-    filename = export_data_dir / datetime_tag / "log" / "log"
+    filename = export_data_dir / datetime_tag / "log" / "agent.log"
     df = pd.read_csv(filename, delim_whitespace=True)
     plt.subplot(2, 1, 1)
     plt.title('Training stats')

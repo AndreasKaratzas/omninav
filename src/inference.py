@@ -31,10 +31,8 @@ class Inference:
         Number of hidden units in the model.
     device : str
         Device to use.
-    activation : str
-        Activation function to use.
-    enable_base_model : bool
-        If `True`, enables the base model.
+    en_cnn : bool
+        If `True`, enables the CNN model.
 
     .. [1] Matteo Hessel, Joseph Modayil, Hadovan Hasselt,
         Tom Schaul, Georg Ostrovski, Will Dabney, Dan Horgan,
@@ -52,8 +50,7 @@ class Inference:
         verbose: bool = False,
         num_hiddens: int = 512,
         device: str = 'cpu',
-        activation: str = 'gelu',
-        enable_base_model: bool = False,
+        en_cnn: bool = False
     ):
         # Device: cpu / gpu
         self.device = self.get_device(device=device)
@@ -68,8 +65,9 @@ class Inference:
 
         # Networks: online, target
         self.online = RainbowDQN(in_dim=env.observation_space.shape, out_dim=env.action_space.n,
-                                 atom_size=self.atoms, support=self.support, activation=activation,
-                                 num_hiddens=num_hiddens, enable_base_model=enable_base_model, verbose=verbose).to(self.device)
+                                 atom_size=self.atoms, support=self.support, demo=True,
+                                 num_hiddens=num_hiddens, verbose=verbose,
+                                 en_cnn=en_cnn).to(self.device)
 
         # Checkpoint loaders
         self.load(model_checkpoint / "model.pth")

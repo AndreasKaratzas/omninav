@@ -2,6 +2,7 @@
 import sys
 sys.path.append("../")
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,9 +29,10 @@ def init_(module, weight_init=nn.init.orthogonal_, bias_init=nn.init.constant_, 
     torch.nn.Module
         Initialized module.
     """
-    weight_init(module.weight.data, gain=gain)
-    if module.bias is not None:
-        bias_init(module.bias.data)
+    if module in [nn.Linear or nn.Conv2d]:
+        weight_init(module.weight.data, gain=gain)
+        if module.bias is not None:
+            bias_init(module.bias.data)
     return module
 
 
@@ -80,54 +82,73 @@ class RainbowDQN(nn.Module):
         Activation function used in the block.
     num_hiddens : int (default: 128)
         Number of hidden units in the fully connected layer.
-    enable_base_model : bool (default: False)
-        Whether to use the base model or the ResNet.
+    demo : bool (default: False)
+        Whether to initialize the weights (if training) or not.
     verbose : bool (default: False)
         Whether to print the model configuration.
+    en_cnn : bool (default: False)
+        Whether to enable the CNN backbone.
     """
 
-    def __init__(self, in_dim, out_dim, atom_size, support, num_hiddens=128, verbose=False):
+    def __init__(self, in_dim, out_dim, atom_size, support, 
+                 num_hiddens=128, verbose=False, demo=False,
+                 en_cnn=False):
         super(RainbowDQN, self).__init__()
 
-        c, h, w = in_dim
+        if en_cnn:
+            c, h, w = in_dim
+
+            if verbose:
+                print(f"Configuring CNN backbone for input shape: ({c}, {h}, {w})")
+
         self.support = support
         self.out_dim = out_dim
         self.atom_size = atom_size
 
-        if verbose:
-            print(f"Configuring CNN backbone for input shape: ({c}, {h}, {w})")
+        if en_cnn:
+            backbone = nn.Sequential(
+                nn.Conv2d(c, 32, kernel_size=8, stride=4),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=4, stride=2),
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Flatten(),
+            )
 
-        backbone = nn.Sequential(
-            nn.Conv2d(c, 32, kernel_size=8, stride=4),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Flatten(),
-        )
+            # Calculate output size dynamically
+            dummy_input = torch.zeros(1, c, h, w)
+            dummy_output = backbone(dummy_input)
+            output_size = dummy_output.size(1)
 
-        # Calculate output size dynamically
-        dummy_input = torch.zeros(1, c, h, w)
-        dummy_output = backbone(dummy_input)
-        output_size = dummy_output.size(1)
-
-        # set common feature layer
-        self.neural = nn.Sequential(
-            nn.Conv2d(c, 32, kernel_size=8, stride=4),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(output_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, num_hiddens)
-        )
+            # set common feature layer
+            self.neural = nn.Sequential(
+                nn.Conv2d(c, 32, kernel_size=8, stride=4),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=4, stride=2),
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, stride=1),
+                nn.ReLU(),
+                nn.Flatten(),
+                nn.Linear(output_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, num_hiddens),
+                nn.ReLU()
+            )
+        
+        else:
+            # set common feature layer
+            self.neural = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(np.prod(in_dim), 256),
+                nn.ReLU(),
+                nn.Linear(256, 256),
+                nn.ReLU()
+            )
 
         # Initialize neural network
-        self.neural.apply(lambda m: init(m, activation='relu'))
+        if not demo:
+            self.neural.apply(lambda m: init(m, activation='relu'))
 
         # set advantage layer
         self.advantage_hidden_layer = NoisyLinear(
@@ -143,15 +164,13 @@ class RainbowDQN(nn.Module):
         if verbose:
             print(f"Total number of parameters: {self.num_params}")
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         """Forward propagation of input.
 
         Attributes
         ----------
         x : torch.Tensor
             Input tensor to be propagated to the model.
-        mask : torch.Tensor (default: None)
-            Masking tensor for invalid actions.
         """
         dist = self.dist(x)
         q = torch.sum(dist * self.support, dim=2)
@@ -194,49 +213,3 @@ class RainbowDQN(nn.Module):
         """Calculate number of parameters in the model.
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-if __name__ == "__main__":
-    from thop import profile
-    in_dim = (4, 22 * 8, 22 * 8)
-    out_dim = 3
-    atom_size = 51
-    support = torch.linspace(-21, 20, atom_size)
-    model = RainbowDQN(in_dim, out_dim, atom_size, support, verbose=True)
-
-    x = torch.randn(1, 4, 22 * 8, 22 * 8)
-
-    q = model(x)
-    print(q.shape)
-    print(q)
-    print()
-
-    dist = model.dist(x)
-    print(dist.shape)
-    print(dist)
-    print()
-
-    mask = torch.tensor([[0, 1, 0]], dtype=torch.bool)
-
-    q_masked = model(x, mask)
-    print(q_masked.shape)
-    print(q_masked)
-    print()
-
-    macs, params = profile(model, inputs=(x, ))
-
-    print(f"MACs: {macs}")
-    print(f"Params: {params}")
-
-    """
-    Dimensionality analysis:
-        - Input: (1, 4, 22 * 8, 22 * 8) ==> (1, 4, 176, 176)
-        - Output: (1, 3)
-        - Number of parameters: 11,249,856 (11,368,536)
-        - MACs: 14,389,299,712
-
-        - Input: (1, 4, 8 * 8, 8 * 8) ==> (1, 4, 64, 64)
-        - Output: (1, 3)
-        - Number of parameters: 11,249,856 (11,368,536)
-        - MACs: 1,903,002,112
-    """

@@ -12,8 +12,6 @@ sys.path.append('./')
 import coloredlogs
 import gymnasium as gym
 import highway_env
-from gymnasium.wrappers import FrameStack, GrayScaleObservation, TransformObservation
-from nes_py.wrappers import JoypadSpace
 
 from pathlib import Path
 
@@ -24,7 +22,6 @@ from src.metrics import MetricLogger
 from src.nvidia import cuda_check
 from src.utils import create_data_dir, get_chkpt, experiment_data_plots
 from src.engine import Engine
-from src.wrappers import ResizeObservation, SkipFrame
 
 
 if __name__ == "__main__":
@@ -84,7 +81,40 @@ if __name__ == "__main__":
     # Build environment
     env = gym.make("highway-fast-v0", render_mode=render_mode)
     # Apply Wrappers to environment
-    env = create_mario_env(env)
+    if args.en_cnn:
+        env.unwrapped.configure({
+            "observation": {
+                "type": "GrayscaleObservation",
+                "observation_shape": (128, 64),
+                "stack_size": 4,
+                "weights": [0.2989, 0.5870, 0.1140],  # weights for RGB conversion
+                "scaling": 1.75,
+            },
+            "lanes_count": 4,
+            "duration": 60,
+            "vehicles_density": 1,
+            "high_speed_reward": 10,
+        })
+    else:
+        env.unwrapped.configure({
+            "observation": {
+                "type": "Kinematics",
+                "vehicles_count": 15,
+                "features": ["presence", "x", "y", "vx", "vy", "cos_h", "sin_h"],
+                "features_range": {
+                    "x": [-100, 100],
+                    "y": [-100, 100],
+                    "vx": [-20, 20],
+                    "vy": [-20, 20]
+                },
+                "absolute": False,
+                "order": "sorted"
+            },
+            "duration": 60,
+            "high_speed_reward": 10,
+            "right_lane_reward": 0.4,
+            # "collision_reward": -5,
+        })
     # Reset environment
     env.reset(seed=args.seed)
     # Create Rainbow agent
@@ -95,9 +125,9 @@ if __name__ == "__main__":
         v_min=args.v_min, n_atoms=args.n_atoms, learning_rate=args.learning_rate, episodes=args.episodes,
         model_save_dir=model_save_dir, memory_save_dir=memory_save_dir, model_checkpoint=model_checkpoint,
         mem_checkpoint=mem_checkpoint, clip_grad_norm=args.clip_grad_norm, topk=args.top_k, verbose=args.verbose, 
-        demo=args.test_mode, learning_starts=args.learning_starts, num_hiddens=args.num_hiddens, device=args.device,
+        learning_starts=args.learning_starts, num_hiddens=args.num_hiddens, device=args.device,
         prior_eps=args.prior_eps, num_of_steps_to_checkpoint_memory=args.num_of_steps_to_checkpoint_memory,
-        activation=args.activation, enable_base_model=args.use_base, )
+        en_cnn=args.en_cnn)
 
     # Declare a logger instance to output experiment data
     logger = MetricLogger(log_save_dir, args.name, args.wandb, args.tensorboard, args.verbosity)
@@ -107,11 +137,10 @@ if __name__ == "__main__":
 
     # Fire up engine
     Engine(
-        env=env, agent=agent, logger=logger, en_train=args.train, en_eval=args.evaluate, 
-        en_visual=args.render, episodes=args.episodes, test_cases=args.test_set_cardinality, 
-        verbosity=args.verbosity, workload=args.workload,
+        env=env, agent=agent, logger=logger, en_train=True,
+        en_visual=args.render, episodes=args.episodes, 
+        verbosity=args.verbosity,
     )
 
-    if args.train:
-        # Plot log data
-        experiment_data_plots(export_data_dir, datetime_tag)
+    # Plot log data
+    experiment_data_plots(export_data_dir, datetime_tag)
