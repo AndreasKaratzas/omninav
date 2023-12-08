@@ -36,6 +36,20 @@ conda env export --no-builds > environment.yml
 
 ### Usage
 
+To train the agent with the MLP policy, use:
+```bash
+python train.py --device 'cuda:0' --mem-capacity 50000 --batch-size 64 --target-sync 500 --learning-starts 500 --num-of-steps-to-checkpoint-model 1000 --num-of-steps-to-checkpoint-memory 2000 --episodes 200 --gamma 0.9 --alpha 0.4 --beta 0.6 --prior-eps 1e-6 --v-min -10.0 --v-max 100.0 --n-atoms 51 --n-step 3 --verbosity 10 --learning-rate 5e-4 --info --use-deterministic-algorithms --clip-grad-norm 40.0 --top-k 10 --num-hiddens 256 --wandb --tensorboard --name "Rainbow" --store "options" --verbose --seed 33
+```
+
+To train the agent with the CNN policy, use:
+```bash
+python train.py --device 'cuda:0' --mem-capacity 100000 --batch-size 128 --target-sync 1000 --learning-starts 2000 --num-of-steps-to-checkpoint-model 1000 --num-of-steps-to-checkpoint-memory 2000 --episodes 500 --gamma 0.99 --alpha 0.4 --beta 0.6 --prior-eps 1e-6 --v-min -10.0 --v-max 100.0 --n-atoms 51 --n-step 3 --verbosity 10 --learning-rate 25e-4 --info --use-deterministic-algorithms --clip-grad-norm 40.0 --top-k 10 --num-hiddens 512 --wandb --tensorboard --name "Rainbow" --store "options" --verbose --seed 33 --en-cnn
+```
+
+To test the agent, use:
+```bash
+python test.py --device 'cuda:0' --episodes 5 --verbosity 1 --info --use-deterministic-algorithms --name "Rainbow" --sync "data/2023-AA-BBTCC-DD-EE" --verbose --seed 33 [--en-cnn]
+```
 
 ### Results
 
@@ -45,5 +59,9 @@ To monitor with TensorBoard, use:
 tensorboard --logdir=./data/datetime/ --host localhost --port 8888
 ```
 
+The agent with the MLP policy achieves:
 
+![MLP](docs/mlp.png)
 
+The agent with the CNN policy achieves:
+![CNN](docs/cnn.png)
